@@ -1,5 +1,8 @@
 import Link from "next/link";
 
+// Auth pages use client-side Supabase — opt out of static prerendering.
+export const dynamic = "force-dynamic";
+
 export default function AuthLayout({
   children,
 }: {

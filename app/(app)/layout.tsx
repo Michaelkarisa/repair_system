@@ -1,5 +1,8 @@
 "use client";
 
+// All routes under (app) require auth and live Supabase data — never statically prerender them.
+export const dynamic = "force-dynamic";
+
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -49,4 +52,3 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     </AuthProvider>
   );
 }
-
