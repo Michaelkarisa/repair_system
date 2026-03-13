@@ -4,7 +4,7 @@ import { Check } from "lucide-react";
 
 interface PricingCardProps {
   name: string;
-  price: number;
+  price: string;
   description: string;
   features: string[];
   highlighted?: boolean;
@@ -29,7 +29,7 @@ export function PricingCard({
       <p className="text-sm text-muted-foreground mb-6">{description}</p>
 
       <div className="mb-6">
-        <span className="text-4xl font-bold text-foreground">${price}</span>
+        <span className="text-4xl font-bold text-foreground">{price}</span>
         <span className="text-muted-foreground">/month</span>
       </div>
 
