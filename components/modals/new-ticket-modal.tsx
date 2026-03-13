@@ -1,314 +1,189 @@
 "use client";
 
 import { useState } from "react";
+import { createTicket } from "@/lib/actions/tickets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-context";
+import type { Customer, TeamMember, TicketPriority } from "@/lib/types";
+import { TICKET_PRIORITY_LABELS } from "@/lib/types";
 
 interface NewTicketModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit?: (data: any) => void;
+  customers: Customer[];
+  teamMembers: TeamMember[];
+  onSuccess?: () => void;
 }
 
-export function NewTicketModal({
-  open,
-  onOpenChange,
-  onSubmit,
-}: NewTicketModalProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    customerName: "",
-    phone: "",
-    deviceType: "iPhone",
-    deviceBrand: "",
-    deviceModel: "",
-    imeiSerial: "",
-    issueDescription: "",
-    conditionNotes: "",
-    depositAmount: "0",
-    estimatedCost: "0",
-    technician: "tech-001",
-  });
+const INITIAL = {
+  customer_id: "",
+  issue_description: "",
+  priority: "medium" as TicketPriority,
+  cost_estimate: "0",
+  deposit_amount: "0",
+  assigned_to: "",
+  lock_code: "",
+  intake_condition: "",
+};
+
+export function NewTicketModal({ open, onOpenChange, customers, teamMembers, onSuccess }: NewTicketModalProps) {
+  const { user } = useAuth();
+  const [form, setForm] = useState(INITIAL);
+  const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const technicians = teamMembers.filter(m => m.status === "active");
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.customer_id) e.customer_id = "Please select a customer";
+    if (!form.issue_description.trim()) e.issue_description = "Issue description is required";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const ticketCode = `TK-${Math.random().toString().slice(2, 6).padStart(3, "0")}`;
-    console.log("[v0] New ticket created:", { ...formData, ticketCode });
-
-    setIsLoading(false);
-    setFormData({
-      customerName: "",
-      phone: "",
-      deviceType: "iPhone",
-      deviceBrand: "",
-      deviceModel: "",
-      imeiSerial: "",
-      issueDescription: "",
-      conditionNotes: "",
-      depositAmount: "0",
-      estimatedCost: "0",
-      technician: "tech-001",
+    if (!validate() || !user) return;
+    setSaving(true);
+    const res = await createTicket(user.shop_id, user.access_token, {
+      customer_id: form.customer_id,
+      issue_description: form.issue_description.trim(),
+      priority: form.priority,
+      cost_estimate: parseFloat(form.cost_estimate) || 0,
+      deposit_amount: parseFloat(form.deposit_amount) || 0,
+      assigned_to: form.assigned_to || undefined,
+      lock_code: form.lock_code.trim() || undefined,
+      intake_condition: form.intake_condition.trim() || undefined,
     });
-    onOpenChange(false);
-
-    // Show success toast
-    if (onSubmit) {
-      onSubmit(formData);
+    setSaving(false);
+    if (res.error) {
+      const msg = typeof res.error === "string" ? res.error : res.error.message;
+      toast.error("Failed to create ticket", { description: msg });
+    } else {
+      toast.success(`Ticket ${res.data.code} created successfully`);
+      setForm(INITIAL);
+      setErrors({});
+      onOpenChange(false);
+      onSuccess?.();
     }
   };
 
+  const handleClose = () => {
+    if (!saving) { setForm(INITIAL); setErrors({}); onOpenChange(false); }
+  };
+
+  const f = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(p => ({ ...p, [k]: e.target.value }));
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto border-border">
         <DialogHeader>
-          <DialogTitle className="text-foreground">Create New Ticket</DialogTitle>
-          <DialogDescription>
-            Enter repair details to create a new ticket
-          </DialogDescription>
+          <DialogTitle>Create New Ticket</DialogTitle>
+          <DialogDescription>Enter repair details to open a new ticket</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Customer Information */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-foreground text-sm">Customer Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="customerName" className="text-foreground">
-                  Customer Name
-                </Label>
-                <Input
-                  id="customerName"
-                  placeholder="John Doe"
-                  value={formData.customerName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, customerName: e.target.value })
-                  }
-                  className="border-border"
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <Label htmlFor="phone" className="text-foreground">
-                  Phone Number
-                </Label>
-                <Input
-                  id="phone"
-                  placeholder="+1 (555) 000-0000"
-                  value={formData.phone}
-                  onChange={(e) =>
-                    setFormData({ ...formData, phone: e.target.value })
-                  }
-                  className="border-border"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Device Information */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-foreground text-sm">Device Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="deviceType" className="text-foreground">
-                  Device Type
-                </Label>
-                <Select
-                  value={formData.deviceType}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, deviceType: value })
-                  }
-                  disabled={isLoading}
-                >
-                  <SelectTrigger className="border-border">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="iPhone">iPhone</SelectItem>
-                    <SelectItem value="iPad">iPad</SelectItem>
-                    <SelectItem value="MacBook">MacBook</SelectItem>
-                    <SelectItem value="Samsung Galaxy">Samsung Galaxy</SelectItem>
-                    <SelectItem value="Other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="deviceBrand" className="text-foreground">
-                  Brand
-                </Label>
-                <Input
-                  id="deviceBrand"
-                  placeholder="Apple"
-                  value={formData.deviceBrand}
-                  onChange={(e) =>
-                    setFormData({ ...formData, deviceBrand: e.target.value })
-                  }
-                  className="border-border"
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <Label htmlFor="deviceModel" className="text-foreground">
-                  Model
-                </Label>
-                <Input
-                  id="deviceModel"
-                  placeholder="iPhone 15 Pro"
-                  value={formData.deviceModel}
-                  onChange={(e) =>
-                    setFormData({ ...formData, deviceModel: e.target.value })
-                  }
-                  className="border-border"
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <Label htmlFor="imeiSerial" className="text-foreground">
-                  IMEI / Serial
-                </Label>
-                <Input
-                  id="imeiSerial"
-                  placeholder="123456789"
-                  value={formData.imeiSerial}
-                  onChange={(e) =>
-                    setFormData({ ...formData, imeiSerial: e.target.value })
-                  }
-                  className="border-border"
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Repair Details */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-foreground text-sm">Repair Details</h3>
-            <div>
-              <Label htmlFor="issueDescription" className="text-foreground">
-                Issue Description
-              </Label>
-              <Textarea
-                id="issueDescription"
-                placeholder="Describe the issue with the device"
-                value={formData.issueDescription}
-                onChange={(e) =>
-                  setFormData({ ...formData, issueDescription: e.target.value })
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Customer */}
+          <div className="space-y-1">
+            <Label>Customer *</Label>
+            <Select value={form.customer_id} onValueChange={v => setForm(p => ({ ...p, customer_id: v }))} disabled={saving}>
+              <SelectTrigger className="border-border">
+                <SelectValue placeholder="Select a customer…" />
+              </SelectTrigger>
+              <SelectContent>
+                {customers.length === 0
+                  ? <SelectItem value="none" disabled>No customers yet</SelectItem>
+                  : customers.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</SelectItem>
+                  ))
                 }
-                className="border-border min-h-20"
-                disabled={isLoading}
-              />
+              </SelectContent>
+            </Select>
+            {errors.customer_id && <p className="text-xs text-destructive">{errors.customer_id}</p>}
+          </div>
+
+          {/* Issue */}
+          <div className="space-y-1">
+            <Label>Issue Description *</Label>
+            <Textarea value={form.issue_description} onChange={f("issue_description")}
+              placeholder="Describe the problem with the device…"
+              className="border-border min-h-[80px]" disabled={saving} />
+            {errors.issue_description && <p className="text-xs text-destructive">{errors.issue_description}</p>}
+          </div>
+
+          {/* Intake condition */}
+          <div className="space-y-1">
+            <Label>Intake Condition (optional)</Label>
+            <Textarea value={form.intake_condition} onChange={f("intake_condition")}
+              placeholder="Physical condition, accessories received, pre-existing damage…"
+              className="border-border min-h-[60px]" disabled={saving} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            {/* Priority */}
+            <div className="space-y-1">
+              <Label>Priority</Label>
+              <Select value={form.priority} onValueChange={v => setForm(p => ({ ...p, priority: v as TicketPriority }))} disabled={saving}>
+                <SelectTrigger className="border-border"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TICKET_PRIORITY_LABELS).map(([v, l]) => (
+                    <SelectItem key={v} value={v}>{l}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div>
-              <Label htmlFor="conditionNotes" className="text-foreground">
-                Condition Notes
-              </Label>
-              <Textarea
-                id="conditionNotes"
-                placeholder="Any notes about the device condition"
-                value={formData.conditionNotes}
-                onChange={(e) =>
-                  setFormData({ ...formData, conditionNotes: e.target.value })
-                }
-                className="border-border min-h-20"
-                disabled={isLoading}
-              />
+
+            {/* Assign to */}
+            <div className="space-y-1">
+              <Label>Assign To</Label>
+              <Select value={form.assigned_to} onValueChange={v => setForm(p => ({ ...p, assigned_to: v }))} disabled={saving}>
+                <SelectTrigger className="border-border"><SelectValue placeholder="Unassigned" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Unassigned</SelectItem>
+                  {technicians.map(m => (
+                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
-          {/* Cost & Assignment */}
-          <div className="space-y-3">
-            <h3 className="font-semibold text-foreground text-sm">Cost & Assignment</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <Label htmlFor="depositAmount" className="text-foreground">
-                  Deposit Amount
-                </Label>
-                <Input
-                  id="depositAmount"
-                  type="number"
-                  placeholder="0"
-                  value={formData.depositAmount}
-                  onChange={(e) =>
-                    setFormData({ ...formData, depositAmount: e.target.value })
-                  }
-                  className="border-border"
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <Label htmlFor="estimatedCost" className="text-foreground">
-                  Estimated Cost
-                </Label>
-                <Input
-                  id="estimatedCost"
-                  type="number"
-                  placeholder="0"
-                  value={formData.estimatedCost}
-                  onChange={(e) =>
-                    setFormData({ ...formData, estimatedCost: e.target.value })
-                  }
-                  className="border-border"
-                  disabled={isLoading}
-                />
-              </div>
-              <div>
-                <Label htmlFor="technician" className="text-foreground">
-                  Assign To
-                </Label>
-                <Select
-                  value={formData.technician}
-                  onValueChange={(value) =>
-                    setFormData({ ...formData, technician: value })
-                  }
-                  disabled={isLoading}
-                >
-                  <SelectTrigger className="border-border">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="tech-001">Alex Johnson</SelectItem>
-                    <SelectItem value="tech-002">Maria Garcia</SelectItem>
-                    <SelectItem value="tech-003">James Lee</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <Label>Est. Cost (KES)</Label>
+              <Input type="number" min="0" step="0.01" value={form.cost_estimate}
+                onChange={f("cost_estimate")} className="border-border" disabled={saving} />
+            </div>
+            <div className="space-y-1">
+              <Label>Deposit (KES)</Label>
+              <Input type="number" min="0" step="0.01" value={form.deposit_amount}
+                onChange={f("deposit_amount")} className="border-border" disabled={saving} />
+            </div>
+            <div className="space-y-1">
+              <Label>Lock Code</Label>
+              <Input value={form.lock_code} onChange={f("lock_code")}
+                placeholder="PIN / password" className="border-border font-mono" disabled={saving} />
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-2 justify-end pt-4 border-t border-border">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={isLoading}
-              className="border-border"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="bg-primary hover:bg-primary/90"
-            >
-              {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {isLoading ? "Creating..." : "Create Ticket"}
+          <div className="flex gap-2 justify-end pt-2 border-t border-border">
+            <Button type="button" variant="ghost" onClick={handleClose} disabled={saving}>Cancel</Button>
+            <Button type="submit" disabled={saving} className="bg-primary hover:bg-primary/90">
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {saving ? "Creating…" : "Create Ticket"}
             </Button>
           </div>
         </form>
