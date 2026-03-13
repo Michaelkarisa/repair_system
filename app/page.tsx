@@ -219,7 +219,7 @@ export default function LandingPage() {
               />
               <PricingCard
                 name="Enterprise"
-                price="Custom"
+                price="$129"
                 description="For large operations"
                 features={[
                   'Everything in Professional',
